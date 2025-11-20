@@ -2,12 +2,13 @@ mod errors;
 mod icmp;
 mod ping;
 
-use std::env;
+use std::{backtrace, env};
 use std::fs::OpenOptions;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use clap::Parser;
 use colorize::AnsiColor;
 use rayon::iter::{ ParallelIterator, IntoParallelIterator };
 use serde::Deserialize;
@@ -40,7 +41,7 @@ fn find_config() -> Result<PathBuf, String> {
     }
 }
 
-
+#[derive(Clone)]
 struct PingResult {
     pub name: String,
     pub ip: Ipv4Addr,
@@ -60,7 +61,48 @@ fn do_ping(server: ServerConfig) -> PingResult {
     }
 }
 
+enum Colour {
+    Bad,
+    Good,
+    Neutral
+}
+
+impl Colour {
+    pub fn wrap(&self, s: String, mode: bool) -> String {
+        match mode {
+            true => {
+                match self {
+                    Self::Bad => format!("%F{{red}}{s}%f"),
+                    Self::Good => format!("%F{{green}}{s}%f"),
+                    Self::Neutral => format!("%F{{blue}}{s}%f"),
+                }
+            },
+            false => {
+                match self {
+                    Self::Bad => s.red(),
+                    Self::Good => s.green(),
+                    Self::Neutral => s.blue(),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Parser)]
+struct Args {
+    #[arg(short, long)]
+    zsh: bool,
+
+    #[arg(short, long)]
+    short: bool,
+    
+    #[arg(short, long)]
+    debug: bool,
+}
+
 fn main() {
+    let args = Args::parse();
+
     let config_path = match find_config() {
         Ok(p) => p,
         Err(e) => {
@@ -77,25 +119,64 @@ fn main() {
     let mut messages = Vec::new();
     for res in &res {
         if res.success {
-            messages.push(res.name.clone().green());
+            messages.push(Colour::Good.wrap(res.name.clone(), args.zsh));
         }
         else {
-            messages.push(res.name.clone().red());
+            messages.push(Colour::Bad.wrap(res.name.clone(), args.zsh));
             fails += 1;
         }
     }
 
-    match fails {
+    let overall_colour = match fails {
         0 => {
-            //print!("{}", " ok".blue())
+            Colour::Good
         },
         _ => {
-            // for res in res.into_iter().filter(|res| !res.success) {
-            //     println!("Ping {} ({}) failed: {}", res.name, res.ip, res.message);
-            // }
+            Colour::Bad
+        }
+    };
+
+    if args.short {
+        let bad_conns: Vec<_> = res
+            .into_iter()
+            .filter(|res|!res.success)
+            .map(|res| Colour::Bad.wrap(res.name, args.zsh))
+            .collect();
+        let mut bad_conns = bad_conns.join(&Colour::Neutral.wrap("|".into(), args.zsh));
+        if bad_conns.len() > 0 {
+            bad_conns = format!("{}{}", Colour::Neutral.wrap("|".into(), args.zsh), bad_conns);
+        }
+
+        print!(
+            "{}{}{}{}",
+            Colour::Neutral.wrap("[".into(), args.zsh),
+            overall_colour.wrap(format!("{}/{}", messages.len() - fails, messages.len()), args.zsh),
+            bad_conns,
+            Colour::Neutral.wrap("]".into(), args.zsh),
+        );
+    }
+    else if args.debug && !args.zsh {
+        for res in res {
+            if res.success {
+                println!("Ping {} ({}) {}", res.name, res.ip, "ok".green());
+            }
+            else {
+                println!("Ping {} ({}) {}: {}", res.name, res.ip, "failed".red(), res.message);
+            }
         }
     }
-    println!("{}{}{}", "[".blue(), messages.join(&"|".blue()), "]".blue());
+    else {
+        print!(
+            "{}{}{}",
+            Colour::Neutral.wrap("[".into(), args.zsh),
+            messages.join(&Colour::Neutral.wrap("|".into(), args.zsh)),
+            Colour::Neutral.wrap("]".into(), args.zsh),
+        );
+    }
+
+    if !args.zsh && !args.debug {
+        println!("");
+    }
 
 
 }

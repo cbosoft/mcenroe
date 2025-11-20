@@ -46,7 +46,10 @@ pub fn ping(
         let mut buffer: [u8; 2048] = [0; 2048];
         let n = match socket.read(&mut buffer) {
             Ok(n) => n,
-            Err(_) => { continue; }
+            Err(e) if e.kind() == std::io::ErrorKind::ResourceBusy => { continue; }
+            Err(e) => {
+                return Err(e.into());
+            }
         };
 
         let reply = match EchoReply::decode(&buffer[..n]) {

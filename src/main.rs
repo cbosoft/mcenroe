@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use colorize::AnsiColor;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{ ParallelIterator, IntoParallelIterator };
 use serde::Deserialize;
 
 use crate::ping::ping;
@@ -74,10 +74,10 @@ fn main() {
     let res: Vec<PingResult> = config.servers.into_par_iter().map(do_ping).collect();
 
     let mut fails = 0usize;
-    print!("{}() -> {}", "ping".yellow(), "[".blue());
+    print!("{}() -> {}", "mcenroe".yellow(), "[".blue());
     for res in &res {
         if res.success {
-            print!(" {}", res.name.clone().green());
+            // print!("{}", res.name.clone().green());
         }
         else {
             print!(" {}", res.name.clone().red());
@@ -86,14 +86,16 @@ fn main() {
     }
 
     match fails {
-        0 => {},
+        0 => {
+            print!("{}", " ok".green())
+        },
         _ => {
-            for res in res.into_iter().filter(|res| !res.success) {
-                println!("Ping {} failed: {}", res.name, res.message);
-            }
+            // for res in res.into_iter().filter(|res| !res.success) {
+            //     println!("Ping {} ({}) failed: {}", res.name, res.ip, res.message);
+            // }
         }
     }
-
     println!("{}", " ]".blue());
+
 
 }

@@ -74,20 +74,20 @@ fn main() {
     let res: Vec<PingResult> = config.servers.into_par_iter().map(do_ping).collect();
 
     let mut fails = 0usize;
-    print!("{}() -> {}", "mcenroe".yellow(), "[".blue());
+    let mut messages = Vec::new();
     for res in &res {
         if res.success {
-            // print!("{}", res.name.clone().green());
+            messages.push(res.name.clone().green());
         }
         else {
-            print!(" {}", res.name.clone().red());
+            messages.push(res.name.clone().red());
             fails += 1;
         }
     }
 
     match fails {
         0 => {
-            print!("{}", " ok".green())
+            //print!("{}", " ok".blue())
         },
         _ => {
             // for res in res.into_iter().filter(|res| !res.success) {
@@ -95,7 +95,7 @@ fn main() {
             // }
         }
     }
-    println!("{}", " ]".blue());
+    println!("{}{}{}", "[".blue(), messages.join(&"|".blue()), "]".blue());
 
 
 }

@@ -44,7 +44,10 @@ pub fn ping(
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
 
         let mut buffer: [u8; 2048] = [0; 2048];
-        let n = socket.read(&mut buffer)?;
+        let n = match socket.read(&mut buffer) {
+            Ok(n) => n,
+            Err(_) => { continue; }
+        };
 
         let reply = match EchoReply::decode(&buffer[..n]) {
             Ok(reply) => reply,

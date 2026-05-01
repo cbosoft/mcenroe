@@ -11,4 +11,5 @@ rayon = "1.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
 socket2 = "0.6.1"
+subprocess = "1.1.0"
 thiserror = "2.0.17"

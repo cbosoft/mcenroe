@@ -15,10 +15,17 @@ use serde::Deserialize;
 
 use crate::ping::ping;
 
+fn default_via() -> Option<Vec<String>> {
+    None
+}
+
 #[derive(Deserialize)]
 struct ServerConfig {
     pub name: String,
-    pub ip: Ipv4Addr
+    pub ip: Ipv4Addr,
+
+    #[serde(default="default_via")]
+    pub via: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -50,8 +57,8 @@ struct PingResult {
 }
 
 fn do_ping(server: ServerConfig) -> PingResult {
-    let ServerConfig{ name, ip, .. } = server;
-    match ping(ip, Duration::from_millis(300)) {
+    let ServerConfig{ name, ip, via, .. } = server;
+    match ping(ip, via, Duration::from_millis(300)) {
         Ok(_) => {
             PingResult { name, ip, success: true, message: format!("") }
         }

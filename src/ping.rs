@@ -51,7 +51,6 @@ pub fn ping(
     via: Option<Vec<String>>,
     timeout: Duration,
 ) -> Result<(), Error> {
-    eprintln!("pinging {addr} via {via:?} with timeout {timeout:?}");
     if let Some(via) = via {
         for via_host in via {
             if _ping(addr, Some(via_host), timeout) {
@@ -65,6 +64,5 @@ pub fn ping(
         }
     }
 
-    eprintln!("{addr} is bad");
     return Err(Error::InternalError);
 }

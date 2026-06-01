@@ -17,7 +17,7 @@ type Token = [u8; TOKEN_SIZE];
 
 fn _ping(addr: Ipv4Addr, via: Option<String>, timeout: Duration) -> bool {
     let cmd = if let Some(via) = via {
-        Exec::cmd("ssh").arg("via").arg("ping")
+        Exec::cmd("ssh").arg(via).arg("ping")
     }
     else {
         Exec::cmd("ping")
@@ -28,7 +28,8 @@ fn _ping(addr: Ipv4Addr, via: Option<String>, timeout: Duration) -> bool {
                 .arg("1")
                 .arg(format!("{addr}"))
                 .stdout(Redirection::Null)
-                .stderr(Redirection::Null);
+                .stderr(Redirection::Null)
+                ;
 
     let job = cmd.start().unwrap();
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check on remote host status
+StartLimitIntervalSec=0
+After=graphical.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=15min
+ExecStart=/home/chris/.cargo/bin/mcenroe
+
+[Install]
+WantedBy=default.target

@@ -11,7 +11,7 @@ use std::time::Duration;
 use clap::Parser;
 use colorize::AnsiColor;
 use rayon::iter::{ ParallelIterator, IntoParallelIterator };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::ping::ping;
 
@@ -48,7 +48,7 @@ fn find_config() -> Result<PathBuf, String> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct PingResult {
     pub name: String,
     pub ip: Ipv4Addr,
@@ -58,7 +58,7 @@ struct PingResult {
 
 fn do_ping(server: ServerConfig) -> PingResult {
     let ServerConfig{ name, ip, via, .. } = server;
-    match ping(ip, via, Duration::from_millis(300)) {
+    match ping(ip, via, Duration::from_secs(5)) {
         Ok(_) => {
             PingResult { name, ip, success: true, message: format!("") }
         }
@@ -105,31 +105,20 @@ struct Args {
     
     #[arg(short, long)]
     debug: bool,
+
+    #[arg(long)]
+    display_recent: bool,
 }
 
-fn main() {
-    let args = Args::parse();
-
-    let config_path = match find_config() {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("{e}");
-            return;
-        }
-    };
-    let f = OpenOptions::new().read(true).open(config_path).unwrap();
-    let config: Config = serde_yaml::from_reader(f).unwrap();
-    
-    let res: Vec<PingResult> = config.servers.into_par_iter().map(do_ping).collect();
-
+fn display(res: Vec<PingResult>, zsh: bool, short: bool, debug: bool) {
     let mut fails = 0usize;
     let mut messages = Vec::new();
     for res in &res {
         if res.success {
-            messages.push(Colour::Good.wrap(res.name.clone(), args.zsh));
+            messages.push(Colour::Good.wrap(res.name.clone(), zsh));
         }
         else {
-            messages.push(Colour::Bad.wrap(res.name.clone(), args.zsh));
+            messages.push(Colour::Bad.wrap(res.name.clone(), zsh));
             fails += 1;
         }
     }
@@ -143,26 +132,26 @@ fn main() {
         }
     };
 
-    if args.short {
+    if short {
         let bad_conns: Vec<_> = res
             .into_iter()
             .filter(|res|!res.success)
-            .map(|res| Colour::Bad.wrap(res.name, args.zsh))
+            .map(|res| Colour::Bad.wrap(res.name, zsh))
             .collect();
-        let mut bad_conns = bad_conns.join(&Colour::Neutral.wrap("|".into(), args.zsh));
+        let mut bad_conns = bad_conns.join(&Colour::Neutral.wrap("|".into(), zsh));
         if bad_conns.len() > 0 {
-            bad_conns = format!("{}{}", Colour::Neutral.wrap("|".into(), args.zsh), bad_conns);
+            bad_conns = format!("{}{}", Colour::Neutral.wrap("|".into(), zsh), bad_conns);
         }
 
         print!(
             "{}{}{}{}",
-            Colour::Neutral.wrap("[".into(), args.zsh),
-            overall_colour.wrap(format!("{}/{}", messages.len() - fails, messages.len()), args.zsh),
+            Colour::Neutral.wrap("[".into(), zsh),
+            overall_colour.wrap(format!("{}/{}", messages.len() - fails, messages.len()), zsh),
             bad_conns,
-            Colour::Neutral.wrap("]".into(), args.zsh),
+            Colour::Neutral.wrap("]".into(), zsh),
         );
     }
-    else if args.debug && !args.zsh {
+    else if debug && !zsh {
         for res in res {
             if res.success {
                 println!("Ping {} ({}) {}", res.name, res.ip, "ok".green());
@@ -175,15 +164,41 @@ fn main() {
     else {
         print!(
             "{}{}{}",
-            Colour::Neutral.wrap("[".into(), args.zsh),
-            messages.join(&Colour::Neutral.wrap("|".into(), args.zsh)),
-            Colour::Neutral.wrap("]".into(), args.zsh),
+            Colour::Neutral.wrap("[".into(), zsh),
+            messages.join(&Colour::Neutral.wrap("|".into(), zsh)),
+            Colour::Neutral.wrap("]".into(), zsh),
         );
     }
 
-    if !args.zsh && !args.debug {
+    if !zsh && !debug {
         println!("");
     }
+}
 
+fn main() {
+    let args = Args::parse();
 
+    let config_path = match find_config() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+    let f = OpenOptions::new().read(true).open(&config_path).unwrap();
+    let config: Config = serde_yaml::from_reader(f).unwrap();
+    let cache_path = config_path.parent().unwrap().join("last_results.yaml");
+    
+    let res: Vec<PingResult> = if args.display_recent {
+        let f = OpenOptions::new().read(true).open(cache_path).unwrap();
+        let results = serde_yaml::from_reader(f).unwrap();
+        results
+    } else {
+        let results: Vec<PingResult> = config.servers.into_par_iter().map(do_ping).collect();
+        let f = OpenOptions::new().write(true).create(true).truncate(true).open(cache_path).unwrap();
+        serde_yaml::to_writer(f, &results).unwrap();
+        results
+    };
+
+    display(res, args.zsh, args.short, args.debug);
 }

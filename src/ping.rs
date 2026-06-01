@@ -1,5 +1,5 @@
 use std::io::Read;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant, SystemTime};
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 use socket2::{Domain, Protocol, Socket, Type};
@@ -15,49 +15,55 @@ const ECHO_REQUEST_BUFFER_SIZE: usize = ICMP_HEADER_SIZE + TOKEN_SIZE;
 type Token = [u8; TOKEN_SIZE];
 
 
-pub fn ping(
-    addr: Ipv4Addr,
-    via: Option<Vec<String>>,
-    timeout: Duration,
-) -> Result<(), Error> {
-    let res = if let Some(via) = via {
-        let mut res = ExitStatus::from_raw(255);
-        for via_host in via {
-            let maybe_res = Exec::cmd("ssh")
-                .arg(via_host)
-                .arg("ping")
-                .arg("-c")
+fn _ping(addr: Ipv4Addr, via: Option<String>, timeout: Duration) -> bool {
+    let cmd = if let Some(via) = via {
+        Exec::cmd("ssh").arg("via").arg("ping")
+    }
+    else {
+        Exec::cmd("ping")
+    };
+    let cmd = cmd.arg("-c")
                 .arg("1")
                 .arg("-w")
                 .arg("1")
                 .arg(format!("{addr}"))
                 .stdout(Redirection::Null)
-                .stderr(Redirection::Null)
-                .join();
-            match maybe_res {
-                Ok(maybe_res) => { if maybe_res.success() { res = maybe_res; break; }},
-                Err(_) => (),
+                .stderr(Redirection::Null);
+
+    let job = cmd.start().unwrap();
+
+    let start = SystemTime::now();
+    let mut res = None;
+    while (start.elapsed().unwrap() < timeout) && res.is_none() {
+        res = job.poll();
+    }
+
+    match res {
+        Some(res) => { res.success() },
+        _ => false
+    }
+}
+
+
+pub fn ping(
+    addr: Ipv4Addr,
+    via: Option<Vec<String>>,
+    timeout: Duration,
+) -> Result<(), Error> {
+    eprintln!("pinging {addr} via {via:?} with timeout {timeout:?}");
+    if let Some(via) = via {
+        for via_host in via {
+            if _ping(addr, Some(via_host), timeout) {
+                return Ok(());
             }
         }
-        res
     }
     else {
-        Exec::cmd("ping")
-            .arg("-c")
-            .arg("1")
-            .arg("-w")
-            .arg("1")
-            .arg(format!("{addr}"))
-            .stdout(Redirection::Null)
-            .stderr(Redirection::Null)
-            .join()
-            .unwrap()
-    };
+        if _ping(addr, None, timeout) {
+            return Ok(())
+        }
+    }
 
-    if !res.success() {
-        return Err(Error::InternalError);
-    }
-    else {
-        return Ok(());
-    }
+    eprintln!("{addr} is bad");
+    return Err(Error::InternalError);
 }

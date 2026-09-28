@@ -143,11 +143,10 @@ fn display(res: Vec<PingResult>, zsh: bool, short: bool, debug: bool) {
         let mut bad_conns = bad_conns.join(&sep);
         if n_bad > 0 {
             if bad_conns.len() <= 3 {
-                bad_conns = format!("{}{}⚠️", sep, bad_conns);
+                bad_conns = format!("{}{}", sep, bad_conns);
             }
             else {
-                let n_bad_str = Colour::Bad.wrap(format!("{}⚠️", n_bad), zsh);
-                bad_conns = format!("{}{}", sep, n_bad_str);
+                bad_conns = "".into();
             }
         }
 
